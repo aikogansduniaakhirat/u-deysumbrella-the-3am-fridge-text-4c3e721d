@@ -1,30 +1,36 @@
 /**
- * The 3AM Fridge Text — make.fun bounty entry (program/v1, judged-artifact).
+ * The 3AM Fridge Text — make.fun entry (program/v1, judged artifact).
  *
- * Sponsor brief: one line, at most 140 characters, the message a smart fridge
- * sends its owner at 3am. The house judge weighs, in order: (1) it IS a 3am
- * fridge text and it is funny, (2) it earns the bigger laugh, the line someone
- * screenshots, (3) it sounds like a fridge — small voice, opinions, no shame
- * about the hour, (4) it stands alone on a lock screen, (5) it dodges the tired
- * angles: milk, ice, the open door.
+ * The bounty: one line, at most 140 characters, "the message a smart fridge
+ * sends its owner at 3am". The house judge weighs, in order:
+ *   1. it is a 3am fridge text, and it is funny
+ *   2. it earns the bigger laugh — the line someone screenshots
+ *   3. it sounds like a fridge: small voice, opinions, no shame about the hour
+ *   4. it stands alone on a lock screen
+ *   5. it dodges the tired angles — milk, ice, the open door
  *
- * So the text is kept as a record — hour, vigil, tally, ask — and rendered. The
- * renderer is where the brief is enforced: every criterion above is asserted on
- * the finished string before a single byte lands on disk, and a failure is a
- * loud refusal, never a quiet downgrade.
+ * Rebuilt 2026-11-25 after the transcript gate rejected the previous bundle:
+ * the shipped line was fine, the authorship proof was not. So this version keeps
+ * the whole entry small enough to read in one go — a record of the four beats,
+ * a renderer, and a guard that refuses to write anything the brief would lose on.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** Cap published by the bounty ("1 to 140 characters"). */
+/** Hard cap the bounty publishes for the line. */
 const CAP = 140;
-/** Local ceiling: never crowd the gate on the way out (Size is a tie-break). */
-const BUDGET = 134;
 
 /**
- * Criterion 5, the named worn angles. A line leaning on one of these is the
- * obvious joke, and the judge ranks a fresh angle over it.
+ * Local ceiling. Character count is the stated tie-break on equal scores, so the
+ * entry spends its budget on the turn and not on padding.
+ */
+const BUDGET = 136;
+
+/**
+ * The worn angles the brief names. A line that leans on one of these is the
+ * obvious joke, and the judge ranks a fresh angle above it — so the guard
+ * checks for them literally rather than trusting the draft to stay clear.
  */
 const WORN: readonly string[] = [
   "door is open",
@@ -32,47 +38,45 @@ const WORN: readonly string[] = [
   "left the door",
   "milk",
   "ice maker",
+  "ice tray",
   "expired",
   "expiring",
+  "use by",
 ];
 
 /**
- * The message, split by beat so each part can be revised on its own later.
+ * The line, split into beats so the guard and the renderer both work on named
+ * parts instead of one opaque string.
  *
- * The vigil is the appliance's own condition — awake, alone, taking inventory
- * nobody asked for — and the ask is small and domestic, so the absurdity sits
- * inside a straight face instead of being announced.
+ * The shape that was kept: the appliance states the hour, reports a vigil it
+ * started on its own, gives one piece of real bookkeeping, then makes a small
+ * domestic ask. The ask is where the turn lands, and it is only funny because
+ * the counting before it is sincere — a fridge that has been keeping a tally
+ * all night and has feelings about the result.
  *
- * Cut: "It's 3am. I have reorganised the shelves by how much you love them."
- * (the fridge judging the owner — funny, but there is no bookkeeping in it, so
- * criterion 3 fails). Cut: "It's 3am. Six yoghurts. I have eaten none of them and
- * I think about it constantly." (a joke about the fridge's inability to eat —
- * the tired angle in a new coat). Shipped: the count is real, then the counting
- * becomes a relationship, which is the only escalation that is still the
- * appliance's own.
+ * Cut on the way here: "I have reorganised the shelves by how much you love
+ * them" (the fridge grading the owner — a good joke with no bookkeeping in it,
+ * which fails criterion 3), and "Six yoghurts. I have eaten none of them and I
+ * think about it constantly" (the inedible-appliance joke, which is the tired
+ * angle wearing a new coat).
  */
 const BEATS = {
-  /** The hour. The pretext for the whole text. */
+  /** The hour, flat, no exclamation — it is the pretext for the message. */
   hour: "It's 3am",
-  /** What the fridge has been doing by itself, in its own flat voice. */
+  /** What the fridge has been doing by itself, in its own voice. */
   vigil: "I've counted the yoghurts again",
-  /** The one piece of bookkeeping, and the turn's setup. */
+  /** The one piece of bookkeeping, and the setup for the turn. */
   tally: "still six",
-  /** The ask — a fridge wants almost nothing, which is the joke. */
+  /** The ask: almost nothing, which is the joke, then the escalation. */
   ask: "I've started naming them, and I'd like you home before I get attached",
 } as const;
 
-/**
- * Render the text from the record: the hour stamps it, the vigil and tally are
- * the machine thinking out loud, and the ask lands the punch. The final clause
- * stays short and domestic on purpose — the judge wants the turn in the last
- * words, and an appliance asking for company beats one asking for anything.
- */
+/** Render the line out of the record — no string concatenation at the call site. */
 function compose(b: typeof BEATS): string {
   return `${b.hour}. ${b.vigil}, ${b.tally}. ${b.ask}.`;
 }
 
-/** Code points, which is what the gate counts (bytes are the tie-break). */
+/** Code points, which is what the gate counts; bytes are the tie-break. */
 function size(text: string): number {
   return Array.from(text).length;
 }
@@ -82,30 +86,46 @@ function refuse(reason: string): never {
   process.exit(1);
 }
 
-/** Assert the sponsor's criteria on the finished string, before writing it. */
+/**
+ * Assert the sponsor's criteria against the finished string, before a byte is
+ * written. Everything here is a criterion the judge actually scores, so a
+ * failure is a loud stop rather than a quiet downgrade of the line.
+ */
 function assertBrief(text: string): void {
   const n = size(text);
 
-  if (n < 1) refuse("empty line");
-  if (n > CAP) refuse(`${n} characters; the gate allows at most ${CAP}`);
+  if (n === 0) refuse("empty line");
+  if (n > CAP) refuse(`${n} characters; the bounty allows at most ${CAP}`);
   if (n > BUDGET) refuse(`${n} characters is over the local budget of ${BUDGET}`);
-  if (text !== text.trim()) refuse("leading or trailing white space");
-  if (/[\r\n]/.test(text)) refuse("more than one line; a text message is one line");
-  // Criterion 1: the hour has to be in it, or it is not the 3am text.
+  if (text !== text.trim()) refuse("leading or trailing white space breaks the lock screen");
+  if (/[\r\n]/.test(text)) refuse("the line wraps; a text message is one line");
+
+  // Criterion 1 — without the hour it is not this bounty's text at all.
   if (!/\b3\s?am\b/i.test(text)) refuse("no 3am in the line");
-  // Criterion 5: the named worn angles.
+
+  // Criterion 5 — the named worn angles, checked literally.
   const lower = text.toLowerCase();
   for (const worn of WORN) {
-    if (lower.includes(worn)) refuse(`"${worn}" is one of the worn-out angles`);
+    if (lower.includes(worn)) refuse(`"${worn}" is one of the worn angles the brief names`);
   }
-  // Criterion 3: a machine doing bookkeeping, not a person complaining. The
-  // tally is the evidence that an appliance is speaking.
-  if (!/\b(counted|count|inventory|stock|logged|scanned|measured|weighed)\b/i.test(text)) {
-    refuse("no machine bookkeeping in the line: it has to sound like the appliance");
+
+  // Criterion 3 — an appliance doing bookkeeping is what makes it the fridge
+  // speaking; without a tally the line could be any housemate's.
+  if (!/\b(counted|counting|count|tally|inventory|stock|logged|scanned|measured|weighed)\b/i.test(text)) {
+    refuse("no bookkeeping in the line: it has to sound like the appliance");
   }
-  // Criterion 4: complete without a follow-up, so it closes itself.
+
+  // Criterion 4 — it has to close itself, because nothing follows it.
   if (!/[.!?]$/.test(text)) refuse("the line does not close");
-  if (/\bundefined\b|\bNaN\b|\[object Object\]/.test(text)) refuse("template hole in the rendered line");
+
+  // Criterion 4 again, from the other side: on a lock screen only the first
+  // ~60 characters are read before the notification collapses, so the setup
+  // has to be finished by then or the turn is never seen.
+  const head = Array.from(text).slice(0, 60).join("");
+  if (!/[.,!?]/.test(head)) refuse("no sentence break in the first 60 characters");
+
+  // Cheap hygiene: a template hole would ship as literal nonsense on a lock screen.
+  if (/undefined|NaN|\[object Object\]|\{\w+\}/.test(text)) refuse("template hole in the rendered line");
 }
 
 function main(): void {
@@ -117,9 +137,9 @@ function main(): void {
   const out = join(dir, "entry.txt");
   writeFileSync(out, text, "utf8");
 
-  // Read back: the judge sees the file, not the constant in memory.
+  // The judge reads the file, not the constant in memory — prove they agree.
   const disk = readFileSync(out, "utf8");
-  if (disk !== text) refuse("disk differs from the rendered line");
+  if (disk !== text) refuse("the file on disk differs from the rendered line");
 
   process.stderr.write(
     `wrote ${size(disk)} characters / ${Buffer.byteLength(disk, "utf8")} bytes\n`,
